@@ -16,9 +16,18 @@ let serviceAccount;
 // ✅ Use environment variable on Render
 if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
   console.log("🔐 Using SERVICE_ACCOUNT from environment variables (Render)");
+
+  // 🧩 Added: normalize both escaped and multiline JSON
+  let rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (rawKey.includes("\n") && !rawKey.includes("\\n")) {
+    // If real newlines exist, compress to one line
+    rawKey = rawKey.replace(/\r?\n/g, "\\n");
+  }
+
   serviceAccount = JSON.parse(
-    process.env.FIREBASE_SERVICE_ACCOUNT_JSON.replace(/\\n/g, "\n")
+    rawKey.replace(/\\n/g, "\n")
   );
+
 } else {
   // ✅ Use local file for development
   const serviceAccountPath = path.resolve(__dirname, "../../serviceAccountKey.json");
