@@ -17,16 +17,14 @@ let serviceAccount;
 if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
   console.log("🔐 Using SERVICE_ACCOUNT from environment variables (Render)");
 
-  // 🧩 Added: normalize both escaped and multiline JSON
+  // 🧩 Normalize any multi-line or escaped key before parsing
   let rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (rawKey.includes("\n") && !rawKey.includes("\\n")) {
-    // If real newlines exist, compress to one line
-    rawKey = rawKey.replace(/\r?\n/g, "\\n");
-  }
 
-  serviceAccount = JSON.parse(
-    rawKey.replace(/\\n/g, "\n")
-  );
+  // 1️⃣ Remove Windows or Unix newlines that break JSON
+  rawKey = rawKey.replace(/\r?\n/g, "\\n");
+
+  // 2️⃣ Now parse safely
+  serviceAccount = JSON.parse(rawKey.replace(/\\\\n/g, "\\n").replace(/\\n/g, "\n"));
 
 } else {
   // ✅ Use local file for development
