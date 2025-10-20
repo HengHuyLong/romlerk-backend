@@ -1,3 +1,4 @@
+// routes/documents.js
 import express from "express";
 import multer from "multer";
 import { verifyFirebaseToken } from "../middleware/auth.js";
@@ -95,6 +96,7 @@ router.post(
 
 /* ============================================================
  🔹 3. SAVE DOCUMENT (called by ApiService.saveDocument)
+     🔸 Updated: now supports profileId to save inside a sub-profile
 ============================================================ */
 router.post("/", verifyFirebaseToken, async (req, res) => {
   try {
@@ -114,13 +116,30 @@ router.post("/", verifyFirebaseToken, async (req, res) => {
       updatedAt: now,
     };
 
-    const docRef = await db
-      .collection("users")
-      .doc(uid)
-      .collection("documents")
-      .add(docWithMeta);
+    const { profileId } = data; // optional
 
-    console.log(`✅ Document saved for user: ${uid}`);
+    let collectionRef;
+
+    // ✅ NEW: support saving under specific profile
+    if (profileId && profileId !== "main") {
+      collectionRef = db
+        .collection("users")
+        .doc(uid)
+        .collection("profiles")
+        .doc(profileId)
+        .collection("documents");
+    } else {
+      // fallback to default user-level collection
+      collectionRef = db.collection("users").doc(uid).collection("documents");
+    }
+
+    const docRef = await collectionRef.add(docWithMeta);
+
+    console.log(
+      `✅ Document saved for user: ${uid}${
+        profileId ? " (profile: " + profileId + ")" : ""
+      }`
+    );
 
     return res.status(201).json({
       message: "✅ Document saved successfully",
@@ -138,17 +157,30 @@ router.post("/", verifyFirebaseToken, async (req, res) => {
 
 /* ============================================================
  🔹 4. FETCH ALL DOCUMENTS (for DocumentsScreen)
+     🔸 Updated: now supports ?profileId=XYZ query
 ============================================================ */
 router.get("/", verifyFirebaseToken, async (req, res) => {
   try {
     const { uid } = req.user || {};
+    const { profileId } = req.query;
+
     if (!uid) return res.status(401).json({ error: "Missing user UID" });
 
-    const snapshot = await db
-      .collection("users")
-      .doc(uid)
-      .collection("documents")
-      .get();
+    let collectionRef;
+
+    // ✅ NEW: fetch documents from specific profile if provided
+    if (profileId && profileId !== "main") {
+      collectionRef = db
+        .collection("users")
+        .doc(uid)
+        .collection("profiles")
+        .doc(profileId)
+        .collection("documents");
+    } else {
+      collectionRef = db.collection("users").doc(uid).collection("documents");
+    }
+
+    const snapshot = await collectionRef.get();
 
     const documents = snapshot.docs.map((doc) => ({
       id: doc.id,
@@ -159,7 +191,11 @@ router.get("/", verifyFirebaseToken, async (req, res) => {
       (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     );
 
-    console.log(`📦 Fetched ${documents.length} documents for user ${uid}`);
+    console.log(
+      `📦 Fetched ${documents.length} documents for user ${uid}${
+        profileId ? " (profile: " + profileId + ")" : ""
+      }`
+    );
 
     return res.status(200).json(documents);
   } catch (error) {
@@ -173,24 +209,33 @@ router.get("/", verifyFirebaseToken, async (req, res) => {
 
 /* ============================================================
  🔹 5. UPDATE DOCUMENT (called by ApiService.updateDocument)
+     🔸 Updated: supports optional profileId in body
 ============================================================ */
 router.patch("/:id", verifyFirebaseToken, async (req, res) => {
   try {
     const { uid } = req.user || {};
     const { id } = req.params;
+    const { profileId, ...updates } = req.body || {};
 
     if (!uid) return res.status(401).json({ error: "Missing user UID" });
     if (!id) return res.status(400).json({ error: "Missing document ID" });
-
-    const updates = req.body || {};
     if (Object.keys(updates).length === 0)
       return res.status(400).json({ error: "No update fields provided" });
 
-    const docRef = db
-      .collection("users")
-      .doc(uid)
-      .collection("documents")
-      .doc(id);
+    let docRef;
+
+    // ✅ NEW: choose profile or root path
+    if (profileId && profileId !== "main") {
+      docRef = db
+        .collection("users")
+        .doc(uid)
+        .collection("profiles")
+        .doc(profileId)
+        .collection("documents")
+        .doc(id);
+    } else {
+      docRef = db.collection("users").doc(uid).collection("documents").doc(id);
+    }
 
     const docSnap = await docRef.get();
     if (!docSnap.exists)
@@ -200,7 +245,12 @@ router.patch("/:id", verifyFirebaseToken, async (req, res) => {
 
     await docRef.set(updates, { merge: true });
 
-    console.log(`✅ Document ${id} updated for user ${uid}`);
+    console.log(
+      `✅ Document ${id} updated for user ${uid}${
+        profileId ? " (profile: " + profileId + ")" : ""
+      }`
+    );
+
     return res.status(200).json({
       message: "✅ Document updated successfully",
       id,
