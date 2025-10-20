@@ -17,13 +17,19 @@ let serviceAccount;
 if (process.env.SERVICE_ACCOUNT) {
   try {
     serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT);
-    console.log("🔐 Using SERVICE_ACCOUNT from environment variables");
+
+    // 🔧 Fix escaped newlines (Render stores \n as literal text)
+    if (serviceAccount.private_key?.includes("\\n")) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+    }
+
+    console.log("🔐 Using SERVICE_ACCOUNT from environment variables (with newline fix)");
   } catch (err) {
     console.error("❌ Invalid SERVICE_ACCOUNT JSON:", err.message);
     process.exit(1);
   }
 } else {
-  // ✅ 2. Fallback to local file (for development)
+  // ✅ 2. Fallback to local file (for local development)
   const serviceAccountPath = path.resolve(__dirname, "../../serviceAccountKey.json");
   if (!fs.existsSync(serviceAccountPath)) {
     console.error("❌ serviceAccountKey.json not found:", serviceAccountPath);
