@@ -11,19 +11,30 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ✅ Load Service Account
-const serviceAccountPath = path.resolve(__dirname, "../../serviceAccountKey.json");
+let serviceAccount;
 
-if (!fs.existsSync(serviceAccountPath)) {
-  console.error("❌ serviceAccountKey.json not found:", serviceAccountPath);
-  process.exit(1);
+// ✅ 1. Prefer environment variable (for Render)
+if (process.env.SERVICE_ACCOUNT) {
+  try {
+    serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT);
+    console.log("🔐 Using SERVICE_ACCOUNT from environment variables");
+  } catch (err) {
+    console.error("❌ Invalid SERVICE_ACCOUNT JSON:", err.message);
+    process.exit(1);
+  }
+} else {
+  // ✅ 2. Fallback to local file (for development)
+  const serviceAccountPath = path.resolve(__dirname, "../../serviceAccountKey.json");
+  if (!fs.existsSync(serviceAccountPath)) {
+    console.error("❌ serviceAccountKey.json not found:", serviceAccountPath);
+    process.exit(1);
+  }
+  serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+  console.log("📁 Using local serviceAccountKey.json");
 }
-
-const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
 
 // ✅ Ensure correct bucket name (new format supported)
 const bucketName = process.env.FIREBASE_STORAGE_BUCKET?.replace("gs://", "");
-
 if (!bucketName) {
   console.error("❌ FIREBASE_STORAGE_BUCKET missing in .env");
   process.exit(1);
@@ -34,19 +45,14 @@ let defaultApp;
 if (!admin.apps.length) {
   defaultApp = admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    storageBucket: bucketName, // ✅ fixed: ensures correct bucket reference
+    storageBucket: bucketName,
   });
   console.log(`✅ Firebase Admin initialized for project: ${serviceAccount.project_id}`);
   console.log(`📦 Using storage bucket: ${bucketName}`);
 }
 
-// ✅ Firestore instance
-export const db = getFirestore(defaultApp, "romlerk-db");
-
-// ✅ Auth instance
+// ✅ Export Firestore, Auth, and Storage bucket
+export const db = getFirestore(defaultApp);
 export const auth = admin.auth();
-
-// ✅ Correct bucket reference
 export const bucket = admin.storage().bucket(bucketName);
-
 export { admin };
