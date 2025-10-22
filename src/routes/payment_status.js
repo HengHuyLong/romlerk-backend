@@ -20,9 +20,27 @@ router.post("/", async (req, res) => {
       });
     }
 
+    // 🔍 Try to detect UID automatically if not provided
+    let userId = uid;
+    if (!userId) {
+      const snapshot = await db
+        .collectionGroup("payments")
+        .where("tran_id", "==", tran_id)
+        .limit(1)
+        .get();
+
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        userId = doc.ref.parent.parent?.id || null;
+        console.log(`📄 Found userId for tran_id=${tran_id}: ${userId}`);
+      } else {
+        console.warn(`⚠️ No matching user found for tran_id=${tran_id}`);
+      }
+    }
+
     // 🔍 Choose correct Firestore path
-    const paymentRef = uid
-      ? db.collection("users").doc(uid).collection("payments").doc(tran_id)
+    const paymentRef = userId
+      ? db.collection("users").doc(userId).collection("payments").doc(tran_id)
       : db.collection("payments").doc(tran_id);
 
     // 🧩 Update Firestore payment document
@@ -38,30 +56,30 @@ router.post("/", async (req, res) => {
     );
 
     console.log(
-      `📡 Firestore updated for tran_id=${tran_id} | status=${status} | user=${uid || "no uid"}`
+      `📡 Firestore updated for tran_id=${tran_id} | status=${status} | user=${userId || "no uid"}`
     );
 
     // 🔁 Determine redirect URL
-const baseUrl = process.env.BASE_URL || "https://romlerk-backend.onrender.com"; // ✅ use .env or default to Render URL
-let redirectUrl = `${baseUrl}/payment/after?state=fail&tran_id=${tran_id}`;
+    const baseUrl = process.env.BASE_URL || "https://romlerk-backend.onrender.com"; // ✅ use .env or fallback
+    let redirectUrl = `${baseUrl}/payment/after?state=fail&tran_id=${tran_id}`;
 
-switch (status) {
-  case "0":
-    console.log(`✅ Payment SUCCESS for tran_id: ${tran_id}`);
-    redirectUrl = `${baseUrl}/payment/after?state=success&tran_id=${tran_id}`;
-    break;
-  case "1":
-    console.log(`⏳ Payment PENDING for tran_id: ${tran_id}`);
-    redirectUrl = `${baseUrl}/payment/after?state=pending&tran_id=${tran_id}`;
-    break;
-  default:
-    console.log(`❌ Payment FAILED for tran_id: ${tran_id}`);
-    redirectUrl = `${baseUrl}/payment/fail?tran_id=${tran_id}`;
-    break;
-}
+    switch (String(status)) {
+      case "0":
+        console.log(`✅ Payment SUCCESS for tran_id: ${tran_id}`);
+        redirectUrl = `${baseUrl}/payment/after?state=success&tran_id=${tran_id}`;
+        break;
+      case "1":
+        console.log(`⏳ Payment PENDING for tran_id: ${tran_id}`);
+        redirectUrl = `${baseUrl}/payment/after?state=pending&tran_id=${tran_id}`;
+        break;
+      default:
+        console.log(`❌ Payment FAILED for tran_id: ${tran_id}`);
+        redirectUrl = `${baseUrl}/payment/fail?tran_id=${tran_id}`;
+        break;
+    }
 
-console.log(`🔁 Redirecting ABA → ${redirectUrl}`);
-return res.redirect(302, redirectUrl);
+    console.log(`🔁 Redirecting ABA → ${redirectUrl}`);
+    return res.redirect(302, redirectUrl);
   } catch (error) {
     console.error("🔥 Error handling ABA callback:", error);
     return res.status(500).json({
