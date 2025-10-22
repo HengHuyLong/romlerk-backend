@@ -73,7 +73,7 @@ function generateReqTimeUTC() {
 }
 
 // ─────────────────────────────────────────────
-// 🧩 POST /api/payment
+// 🧩 POST /payment
 // Create a new ABA QR payment (per user)
 // ─────────────────────────────────────────────
 router.post("/", async (req, res) => {
@@ -99,9 +99,10 @@ router.post("/", async (req, res) => {
       lifetime = 6,
       qr_image_template = "template3_color",
       uid, // ✅ expect user id in body
+      planName, // ✅ added: to know which slot plan user purchased
     } = req.body;
 
-    console.log("💬 Generating PayWay QR for user:", uid);
+    console.log("💬 Generating PayWay QR for user:", uid, "| plan:", planName);
 
     if (!uid) {
       return res.status(400).json({
@@ -191,6 +192,7 @@ router.post("/", async (req, res) => {
         tran_id,
         amount,
         currency,
+        planName: planName || null, // ✅ store plan name for slot tracking
         status: "1", // pending
         created_at: new Date().toISOString(),
         response: result,
@@ -201,7 +203,10 @@ router.post("/", async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Payment QR generated successfully",
-      data: result,
+      data: {
+        ...result,
+        planName, // ✅ return it back to Flutter for transparency
+      },
     });
   } catch (error) {
     console.error("🔥 Error generating payment QR:", error);

@@ -9,7 +9,7 @@ const router = express.Router();
  */
 router.post("/", async (req, res) => {
   try {
-    const { tran_id, status, apv, merchant_ref_no, uid } = req.body;
+    const { tran_id, status, apv, merchant_ref_no, uid, planName } = req.body;
 
     console.log("💬 [ABA Callback Received]:", req.body);
 
@@ -59,8 +59,44 @@ router.post("/", async (req, res) => {
       `📡 Firestore updated for tran_id=${tran_id} | status=${status} | user=${userId || "no uid"}`
     );
 
+    // 🟩 If payment SUCCESS → increase user slot count
+    if (String(status) === "0" && userId) {
+      let additionalSlots = 0;
+
+      // Determine based on planName
+      if (planName?.includes("5")) additionalSlots = 5;
+      else if (planName?.includes("10")) additionalSlots = 10;
+      else if (planName?.includes("20")) additionalSlots = 20;
+
+      if (additionalSlots > 0) {
+        const userRef = db.collection("users").doc(userId);
+        const userDoc = await userRef.get();
+
+        const currentSlots = userDoc.data()?.slots || {
+          usedSlots: 0,
+          maxSlots: 3,
+        };
+        const newMax = (currentSlots.maxSlots || 3) + additionalSlots;
+
+        await userRef.set(
+          {
+            slots: {
+              usedSlots: currentSlots.usedSlots,
+              maxSlots: newMax,
+            },
+          },
+          { merge: true }
+        );
+
+        console.log(
+          `🎉 Slots updated for user=${userId}: ${currentSlots.maxSlots} → ${newMax}`
+        );
+      }
+    }
+
     // 🔁 Determine redirect URL
-    const baseUrl = process.env.BASE_URL || "https://romlerk-backend.onrender.com"; // ✅ use .env or fallback
+    const baseUrl =
+      process.env.BASE_URL || "https://romlerk-backend.onrender.com"; // ✅ use .env or fallback
     let redirectUrl = `${baseUrl}/payment/after?state=fail&tran_id=${tran_id}`;
 
     switch (String(status)) {

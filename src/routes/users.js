@@ -1,4 +1,3 @@
-// routes/userRoutes.js
 import express from "express";
 import { verifyFirebaseToken } from "../middleware/auth.js";
 import { db } from "../config/firebase.js";
@@ -23,13 +22,14 @@ router.post("/login", verifyFirebaseToken, async (req, res) => {
     const userDoc = await userRef.get();
 
     if (!userDoc.exists) {
-      // New user — create minimal record (no name yet)
+      // 🆕 New user — create minimal record with default 3 slots
       const newUser = {
         uid,
         phone: phone || null,
-        name: null, // no default string, leave empty
+        name: null,
         createdAt: new Date().toISOString(),
         lastLoginAt: new Date().toISOString(),
+        slots: { usedSlots: 0, maxSlots: 3 }, // ✅ Default for all new users
       };
 
       await userRef.set(newUser);
@@ -41,7 +41,7 @@ router.post("/login", verifyFirebaseToken, async (req, res) => {
       });
     }
 
-    // Existing user — update last login only
+    // 🧭 Existing user — update login timestamp
     const existingData = userDoc.data();
     const updates = { lastLoginAt: new Date().toISOString() };
 
@@ -92,8 +92,6 @@ router.patch("/profile", verifyFirebaseToken, async (req, res) => {
 
     await userRef.update(updates);
 
-    // Avoided a second database read for efficiency.
-    // Merge existing data with updates and return immediately.
     const existingData = userDoc.data();
     const updatedData = { ...existingData, ...updates };
 
@@ -106,6 +104,69 @@ router.patch("/profile", verifyFirebaseToken, async (req, res) => {
     return res.status(500).json({
       error: "Unexpected error updating profile",
       details: error.message || error.toString(),
+    });
+  }
+});
+
+/**
+ * 🧭 GET /users/:uid
+ * Used by Flutter to fetch user slot info.
+ */
+router.get("/:uid", async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const userRef = db.collection("users").doc(uid);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const data = userDoc.data();
+    return res.status(200).json({
+      success: true,
+      uid,
+      slots: data.slots || { usedSlots: 0, maxSlots: 3 },
+    });
+  } catch (error) {
+    console.error("🔥 Error fetching user:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch user data",
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * 🧩 PATCH /users/:uid/slots
+ * Used by Flutter to sync updated slot count after payment.
+ */
+router.patch("/:uid/slots", async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const { slots } = req.body;
+
+    if (!slots || typeof slots !== "object") {
+      return res.status(400).json({ message: "Invalid slots payload" });
+    }
+
+    const userRef = db.collection("users").doc(uid);
+    await userRef.set({ slots }, { merge: true });
+
+    res.status(200).json({
+      success: true,
+      message: "Slots updated successfully",
+      slots,
+    });
+
+    console.log(`✅ Slots updated for user ${uid}:`, slots);
+  } catch (error) {
+    console.error("🔥 Error updating slots:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update slots",
+      details: error.message,
     });
   }
 });
