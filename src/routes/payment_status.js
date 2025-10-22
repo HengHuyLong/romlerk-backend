@@ -42,25 +42,26 @@ router.post("/", async (req, res) => {
     );
 
     // 🔁 Determine redirect URL
-    let redirectUrl = `http://localhost:8080/payment/after?state=fail&tran_id=${tran_id}`;
+const baseUrl = process.env.BASE_URL || "https://romlerk-backend.onrender.com"; // ✅ use .env or default to Render URL
+let redirectUrl = `${baseUrl}/payment/after?state=fail&tran_id=${tran_id}`;
 
-    switch (status) {
-      case "0":
-        console.log(`✅ Payment SUCCESS for tran_id: ${tran_id}`);
-        redirectUrl = `http://localhost:8080/payment/after?state=success&tran_id=${tran_id}`;
-        break;
-      case "1":
-        console.log(`⏳ Payment PENDING for tran_id: ${tran_id}`);
-        redirectUrl = `http://localhost:8080/payment/after?state=pending&tran_id=${tran_id}`;
-        break;
-      default:
-        console.log(`❌ Payment FAILED for tran_id: ${tran_id}`);
-        redirectUrl = `http://localhost:8080/payment/fail?tran_id=${tran_id}`;
-        break;
-    }
+switch (status) {
+  case "0":
+    console.log(`✅ Payment SUCCESS for tran_id: ${tran_id}`);
+    redirectUrl = `${baseUrl}/payment/after?state=success&tran_id=${tran_id}`;
+    break;
+  case "1":
+    console.log(`⏳ Payment PENDING for tran_id: ${tran_id}`);
+    redirectUrl = `${baseUrl}/payment/after?state=pending&tran_id=${tran_id}`;
+    break;
+  default:
+    console.log(`❌ Payment FAILED for tran_id: ${tran_id}`);
+    redirectUrl = `${baseUrl}/payment/fail?tran_id=${tran_id}`;
+    break;
+}
 
-    console.log(`🔁 Redirecting ABA → ${redirectUrl}`);
-    return res.redirect(302, redirectUrl);
+console.log(`🔁 Redirecting ABA → ${redirectUrl}`);
+return res.redirect(302, redirectUrl);
   } catch (error) {
     console.error("🔥 Error handling ABA callback:", error);
     return res.status(500).json({
